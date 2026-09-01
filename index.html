@@ -194,11 +194,15 @@
 
   .manifest-contact{padding:16px 22px;border-top:1px solid var(--line);margin-top:10px;position:relative;}
   .manifest-contact label{font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-label);font-weight:700;}
+  .manifest-contact label .picker-cue{text-transform:none;letter-spacing:0;font-weight:500;color:var(--text-label);}
+  .picker-field{position:relative;}
   .manifest-contact input{
     width:100%;font-family:var(--font-head);font-weight:700;font-size:17px;border:none;
-    border-bottom:1.5px solid var(--line);padding:6px 0;background:transparent;color:var(--text-primary);margin-top:3px;
+    border-bottom:1.5px solid var(--line);padding:6px 26px 6px 0;background:transparent;color:var(--text-primary);margin-top:3px;
+    cursor:pointer;
   }
   .manifest-contact input:focus{outline:none;border-bottom-color:var(--orange);}
+  .picker-chevron{position:absolute;right:2px;top:50%;transform:translateY(-40%);color:var(--text-label);font-size:14px;pointer-events:none;}
   .contact-flag{display:inline-block;margin-top:9px;font-size:12px;padding:4px 10px;border-radius:20px;font-weight:700;}
   .contact-flag.matched{background:var(--status-green-bg);color:var(--status-green-fg);}
   .contact-flag.new{background:var(--status-gray-bg);color:var(--status-gray-fg);}
@@ -377,7 +381,7 @@
     if(selectName && users.includes(selectName)) userSelect.value = selectName;
     state.submitter = userSelect.value;
   }
-  userSelect.addEventListener('change', ()=>{ state.submitter = userSelect.value; });
+  userSelect.addEventListener('change', ()=>{ state.submitter = userSelect.value; updateApproveAvailability(); });
   el('addUserBtn').addEventListener('click', async ()=>{
     const val = el('newUserInput').value.trim();
     if(!val) return;
@@ -503,10 +507,32 @@
     const dd = document.getElementById('contactDropdown');
     if(dd) dd.classList.remove('open');
   }
+  // Loose comparison so punctuation/spacing differences between an
+  // extracted vendor name and Xero's actual contact record ("PT. Umbra
+  // Prasia" vs "PT UMBRA PRASIA") don't block an otherwise-obvious match.
+  function normalizeContactName(s){
+    return String(s||'').toLowerCase().replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+  }
   function findContactByName(name){
     if(!name) return null;
-    const n = name.trim().toLowerCase();
-    return state.contacts.find(c=>c.name.trim().toLowerCase() === n) || null;
+    const n = normalizeContactName(name);
+    if(!n) return null;
+    return state.contacts.find(c=>normalizeContactName(c.name) === n) || null;
+  }
+  // A softer fallback for auto-suggesting a contact right after extraction:
+  // exact (normalized) match first, then a substring match either
+  // direction — only used to pre-fill the field, never silently trusted
+  // for submission (the user still sees it and can change it).
+  function guessContactByName(name){
+    const exact = findContactByName(name);
+    if(exact) return exact;
+    const n = normalizeContactName(name);
+    if(!n || n.length < 3) return null;
+    const candidates = state.contacts.filter(c=>{
+      const cn = normalizeContactName(c.name);
+      return cn.includes(n) || n.includes(cn);
+    });
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   // ---------- file intake ----------
@@ -563,12 +589,17 @@
         body: JSON.stringify({ recordType: state.type, files: state.files })
       });
       state.draft = draft;
-      // Generic expenses (petrol, small cash purchases) often extract a
-      // vendor name that isn't a real Xero contact, or none at all — and
-      // this app no longer auto-creates new contacts. Default those to the
-      // shared "General Provider" catch-all instead of leaving an unmatched
-      // name the user would just have to fix by hand anyway.
-      if(state.draft.record_type === 'expense' && hasGeneralProvider() && !findContactByName(state.draft.contact_name)){
+      // Pre-select the most likely Xero contact rather than leaving the
+      // user to find it themselves: try a fuzzy match on whatever name was
+      // extracted first (handles punctuation/spacing differences like
+      // "PT. Umbra Prasia" vs "PT UMBRA PRASIA"); for generic expenses
+      // (petrol, small cash purchases) with no confident match, fall back
+      // to the shared "General Provider" catch-all instead of leaving an
+      // unmatched name the user would just have to fix by hand.
+      const guess = guessContactByName(state.draft.contact_name);
+      if(guess){
+        state.draft.contact_name = guess.name;
+      } else if(state.draft.record_type === 'expense' && hasGeneralProvider()){
         state.draft.contact_name = GENERAL_PROVIDER_NAME;
       }
       renderDraft();
@@ -617,8 +648,11 @@
         </div>
 
         <div class="manifest-contact">
-          <label>${d.record_type === 'invoice' ? 'Customer' : 'Supplier'}</label>
-          <input id="mf_contact" type="text" value="${escAttr(d.contact_name)}" autocomplete="off">
+          <label>${d.record_type === 'invoice' ? 'Customer' : 'Supplier'} <span class="picker-cue">— pick from Xero contacts</span></label>
+          <div class="picker-field">
+            <input id="mf_contact" type="text" value="${escAttr(d.contact_name)}" autocomplete="off" placeholder="Click to pick a contact…">
+            <span class="picker-chevron">▾</span>
+          </div>
           <span class="contact-flag" id="contactFlag"></span>
           <div class="contact-dropdown" id="contactDropdown"></div>
         </div>
@@ -660,6 +694,11 @@
     bindDraftEvents();
     populateContactsDatalist();
     refreshContactMatch();
+    // Surface the picklist immediately if nothing was auto-matched, rather
+    // than leaving the user to guess that the field is a picker at all.
+    if(!state.draft.contact_id){
+      renderContactDropdown(state.draft.contact_name);
+    }
   }
 
   function renderLines(){
@@ -711,12 +750,27 @@
       flagEl.className = 'contact-flag matched';
       state.draft.contact_id = match.id;
     } else if(state.draft.contact_name && state.draft.contact_name.trim()){
-      flagEl.textContent = 'No match in Xero — will be created as a new contact';
+      flagEl.textContent = `Not a Xero contact — pick one from the list below${hasGeneralProvider() ? ` (or "${GENERAL_PROVIDER_NAME}" for a generic vendor)` : ''}`;
       flagEl.className = 'contact-flag new';
       state.draft.contact_id = null;
     } else {
-      flagEl.textContent = ''; flagEl.className = 'contact-flag'; state.draft.contact_id = null;
+      flagEl.textContent = 'Pick a Xero contact — click the field below';
+      flagEl.className = 'contact-flag new';
+      state.draft.contact_id = null;
     }
+    updateApproveAvailability();
+  }
+  // "Think navigation UX": don't let the user hit Approve and only then
+  // learn it's missing something — disable it proactively, with the reason
+  // visible, and re-check on every relevant change.
+  function updateApproveAvailability(){
+    const btn = el('approveBtn');
+    if(!btn || !state.draft || btn.textContent === 'Sending…' || btn.textContent === 'Sent') return;
+    const missing = [];
+    if(!state.submitter) missing.push('who is submitting');
+    if(!state.draft.contact_id) missing.push('a valid Xero contact');
+    btn.disabled = missing.length > 0;
+    btn.title = missing.length ? `Still need: ${missing.join(', ')}` : '';
   }
 
   function bindDraftEvents(){
@@ -794,13 +848,12 @@
   const POLL_MAX_ATTEMPTS = 100; // ~5 minutes
 
   async function approveDraft(){
-    if(!state.submitter){ alert('Choose who is submitting this record first.'); return; }
+    // The button is kept disabled (see updateApproveAvailability) until a
+    // submitter and a matched Xero contact are both set, so reaching here
+    // means both are already satisfied — this is just a defensive guard,
+    // not the primary way the user finds out something's missing.
     const d = state.draft;
-    if(!d.contact_name.trim()){ alert('Contact name is required.'); return; }
-    if(!d.contact_id){
-      alert(`Pick an existing Xero contact from the list (not a typed name) before sending — this app no longer auto-creates new contacts. For a generic expense with no specific vendor, use "${GENERAL_PROVIDER_NAME}".`);
-      return;
-    }
+    if(!state.submitter || !d.contact_id) return;
 
     el('approveBtn').disabled = true;
     el('approveBtn').textContent = 'Sending…';
