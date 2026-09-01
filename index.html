@@ -166,7 +166,7 @@
   }
   .mf input:focus,.mf select:focus{outline:none;border-bottom-color:var(--orange);}
 
-  .manifest-contact{padding:16px 22px;border-top:1px solid var(--line);margin-top:10px;}
+  .manifest-contact{padding:16px 22px;border-top:1px solid var(--line);margin-top:10px;position:relative;}
   .manifest-contact label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:var(--slate);font-weight:600;}
   .manifest-contact input{
     width:100%;font-family:var(--font-head);font-weight:700;font-size:17px;border:none;
@@ -177,6 +177,16 @@
   .contact-flag.matched{background:#E8F3EF;color:#2F6E62;}
   .contact-flag.new{background:var(--orange-soft);color:var(--orange);}
   .contact-flag:empty{display:none;}
+  .contact-dropdown{
+    position:absolute;left:22px;right:22px;top:100%;margin-top:-6px;z-index:20;
+    background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(40,40,95,0.14);
+    max-height:260px;overflow-y:auto;display:none;
+  }
+  .contact-dropdown.open{display:block;}
+  .contact-dropdown-item{padding:9px 14px;font-size:13.5px;color:var(--navy);cursor:pointer;display:flex;justify-content:space-between;gap:10px;}
+  .contact-dropdown-item:hover,.contact-dropdown-item.active{background:var(--orange-soft);}
+  .contact-dropdown-item .tag{font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--slate);font-weight:600;flex-shrink:0;}
+  .contact-dropdown-empty{padding:10px 14px;font-size:12.5px;color:var(--slate);}
 
   .lines-wrap{padding:16px 22px 6px;}
   table.lines{width:100%;border-collapse:collapse;}
@@ -377,9 +387,11 @@
     }
   });
 
-  function populateContactsDatalist(){
-    let dl = document.getElementById('contactsDatalist');
-    if(!dl){ dl = document.createElement('datalist'); dl.id = 'contactsDatalist'; document.body.appendChild(dl); }
+  // Contact picker — a hand-rolled dropdown instead of a native <datalist>,
+  // which several browsers (Safari/iOS in particular) don't reliably show
+  // at all, and which otherwise only filters after typing rather than
+  // offering the full list on focus/click.
+  function getRelevantContacts(){
     const effectiveType = state.draft ? state.draft.record_type : state.type;
     const relevant = effectiveType === 'invoice'
       ? state.contacts.filter(c=>c.isCustomer)
@@ -387,7 +399,35 @@
         ? state.contacts.filter(c=>c.isSupplier)
         : state.contacts;
     const list = relevant.length ? relevant : state.contacts;
-    dl.innerHTML = list.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<option value="${escAttr(c.name)}">`).join('');
+    return list.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  }
+  function populateContactsDatalist(){
+    // Kept as a no-op alias at existing call sites — the dropdown filters
+    // live off state.contacts itself, nothing to precompute.
+  }
+  function renderContactDropdown(filterText){
+    const dd = document.getElementById('contactDropdown');
+    if(!dd) return;
+    const q = (filterText||'').trim().toLowerCase();
+    const all = getRelevantContacts();
+    const matches = q ? all.filter(c=>c.name.toLowerCase().includes(q)) : all;
+    if(!all.length){
+      dd.innerHTML = `<div class="contact-dropdown-empty">No contacts synced yet — click "Sync from Xero" above.</div>`;
+    } else if(!matches.length){
+      dd.innerHTML = `<div class="contact-dropdown-empty">No matching Xero contacts — this will be created as a new contact.</div>`;
+    } else {
+      dd.innerHTML = matches.slice(0,100).map(c=>
+        `<div class="contact-dropdown-item" data-name="${escAttr(c.name)}">
+          <span>${escHtml(c.name)}</span>
+          <span class="tag">${c.isSupplier ? 'Supplier' : c.isCustomer ? 'Customer' : ''}</span>
+        </div>`
+      ).join('');
+    }
+    dd.classList.add('open');
+  }
+  function hideContactDropdown(){
+    const dd = document.getElementById('contactDropdown');
+    if(dd) dd.classList.remove('open');
   }
   function findContactByName(name){
     if(!name) return null;
@@ -496,8 +536,9 @@
 
         <div class="manifest-contact">
           <label>${d.record_type === 'invoice' ? 'Customer' : 'Supplier'}</label>
-          <input id="mf_contact" type="text" list="contactsDatalist" value="${escAttr(d.contact_name)}" autocomplete="off">
+          <input id="mf_contact" type="text" value="${escAttr(d.contact_name)}" autocomplete="off">
           <span class="contact-flag" id="contactFlag"></span>
+          <div class="contact-dropdown" id="contactDropdown"></div>
         </div>
 
         <div class="lines-wrap">
@@ -585,7 +626,27 @@
     el('mf_ref').addEventListener('input', e=>{ state.draft.reference = e.target.value; });
     el('mf_date').addEventListener('input', e=>{ state.draft.document_date = e.target.value; });
     el('mf_due').addEventListener('input', e=>{ state.draft.due_date = e.target.value; });
-    el('mf_contact').addEventListener('input', e=>{ state.draft.contact_name = e.target.value; refreshContactMatch(); });
+    const contactInput = el('mf_contact');
+    contactInput.addEventListener('input', e=>{
+      state.draft.contact_name = e.target.value;
+      refreshContactMatch();
+      renderContactDropdown(e.target.value);
+    });
+    contactInput.addEventListener('focus', e=>renderContactDropdown(e.target.value));
+    contactInput.addEventListener('blur', ()=>{
+      // Delay so a click on a dropdown item registers before it disappears.
+      setTimeout(hideContactDropdown, 150);
+    });
+    el('contactDropdown').addEventListener('mousedown', e=>{
+      const item = e.target.closest('.contact-dropdown-item');
+      if(!item) return;
+      e.preventDefault(); // keep focus on the input instead of stealing it
+      const name = item.getAttribute('data-name');
+      contactInput.value = name;
+      state.draft.contact_name = name;
+      refreshContactMatch();
+      hideContactDropdown();
+    });
 
     el('addLineBtn').addEventListener('click', ()=>{
       state.draft.line_items.push({description:'', quantity:1, unit_amount:0});
