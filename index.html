@@ -183,6 +183,20 @@
   .status-pill.draft{background:var(--status-yellow-bg);color:var(--status-yellow-fg);}
   .status-pill.sent{background:var(--status-green-bg);color:var(--status-green-fg);}
 
+  .doc-preview{position:relative;max-height:260px;overflow:hidden;background:var(--light-gray);border-bottom:1px solid var(--line);}
+  .doc-preview img{width:100%;max-height:260px;object-fit:contain;display:block;background:var(--text-primary);}
+  .doc-preview-pdf{height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-secondary);font-size:12.5px;}
+  .doc-preview-pdf span:first-child{font-size:34px;}
+  .tracking-overlay{
+    position:absolute;top:10px;left:10px;right:10px;display:flex;gap:10px;flex-wrap:wrap;
+  }
+  .tracking-field{
+    background:rgba(255,255,255,0.95);backdrop-filter:blur(2px);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;box-shadow:0 4px 14px rgba(26,26,26,0.16);min-width:170px;flex:1;
+  }
+  .tracking-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-label);font-weight:700;margin-bottom:4px;}
+  .tracking-field select{width:100%;font-size:13px;border:1px solid var(--line);border-radius:5px;padding:5px 6px;background:var(--white);color:var(--text-primary);}
+
   .manifest-head{padding:20px 22px 6px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px 18px;}
   @media (max-width:640px){.manifest-head{grid-template-columns:1fr 1fr;}}
   .mf{display:flex;flex-direction:column;gap:5px;}
@@ -354,7 +368,8 @@
     contactsSyncedAt: null,
     history: [],
     historySort: {key:'when', dir:'desc'},
-    historyPage: 0
+    historyPage: 0,
+    tracking: []
   };
 
   const el = (id) => document.getElementById(id);
@@ -409,6 +424,10 @@
     populateContactsDatalist();
     renderGeneralProviderStatus();
   }
+  async function refreshTracking(){
+    const {tracking} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/tracking');
+    state.tracking = tracking || [];
+  }
   function hasGeneralProvider(){
     return state.contacts.some(c=>c.name.trim().toLowerCase() === GENERAL_PROVIDER_NAME.toLowerCase());
   }
@@ -446,8 +465,9 @@
     btn.disabled = true; btn.textContent = 'Syncing…';
     el('contactSyncStatus').textContent = 'Fetching contacts from Xero…';
     try{
-      const {contacts, syncedAt} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts/sync', {method:'POST'});
+      const {contacts, syncedAt, tracking} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts/sync', {method:'POST'});
       state.contacts = contacts; state.contactsSyncedAt = syncedAt;
+      if(tracking) state.tracking = tracking;
       el('contactSyncStatus').textContent = fmtSyncStatus();
       populateContactsDatalist();
       renderGeneralProviderStatus();
@@ -625,14 +645,47 @@
     return state.draft.line_items.reduce((s,li)=>s + (Number(li.quantity)||0)*(Number(li.unit_amount)||0), 0);
   }
 
+  function docPreviewHTML(){
+    const f = state.files[0];
+    if(!f) return '';
+    const isImage = f.mime.startsWith('image/');
+    const src = `data:${f.mime};base64,${f.base64}`;
+    const preview = isImage
+      ? `<img src="${src}" alt="Source document">`
+      : `<div class="doc-preview-pdf"><span>📄</span><span>${escHtml(f.name)}</span></div>`;
+    return `
+      <div class="doc-preview">
+        ${preview}
+        ${state.draft.record_type === 'bill' && state.tracking.length ? trackingOverlayHTML() : ''}
+      </div>
+    `;
+  }
+  function trackingOverlayHTML(){
+    return `
+      <div class="tracking-overlay">
+        ${state.tracking.map(cat => `
+          <div class="tracking-field">
+            <label>${escHtml(cat.name)}</label>
+            <select data-tracking-cat="${cat.id}">
+              <option value="">Select…</option>
+              ${cat.options.map(o => `<option value="${escAttr(o.name)}" ${state.draft.tracking?.[cat.id]===o.name?'selected':''}>${escHtml(o.name)}</option>`).join('')}
+            </select>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   function renderDraft(){
     const d = state.draft;
     const total = calcTotal();
+    if(d.record_type === 'bill' && !d.tracking) d.tracking = {};
 
     setMain(`
       <div class="draft-wrap">
       <div class="manifest">
         <div class="status-pill draft" id="stampEl">Draft</div>
+        ${docPreviewHTML()}
         <div class="manifest-head">
           <div class="mf">
             <label>Record type</label>
@@ -769,6 +822,10 @@
     const missing = [];
     if(!state.submitter) missing.push('who is submitting');
     if(!state.draft.contact_id) missing.push('a valid Xero contact');
+    if(state.draft.record_type === 'bill' && state.tracking.length){
+      const unfilled = state.tracking.filter(cat=>!state.draft.tracking?.[cat.id]);
+      if(unfilled.length) missing.push(unfilled.map(c=>c.name).join(' and '));
+    }
     btn.disabled = missing.length > 0;
     btn.title = missing.length ? `Still need: ${missing.join(', ')}` : '';
   }
@@ -798,6 +855,13 @@
       state.draft.contact_name = name;
       refreshContactMatch();
       hideContactDropdown();
+    });
+
+    document.querySelectorAll('[data-tracking-cat]').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        state.draft.tracking[sel.dataset.trackingCat] = e.target.value || null;
+        updateApproveAvailability();
+      });
     });
 
     el('addLineBtn').addEventListener('click', ()=>{
@@ -1025,6 +1089,7 @@
     await refreshUsers();
     await refreshHistory();
     await refreshContactsFromCache();
+    await refreshTracking();
   })();
 })();
 </script>
