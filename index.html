@@ -276,6 +276,7 @@
           <button class="secondary-btn" id="syncContactsBtn">Sync from Xero</button>
         </div>
         <div class="hint" id="contactSyncStatus">Not synced yet</div>
+        <div class="hint" id="generalProviderStatus" style="display:none;"></div>
 
         <button class="primary-btn" id="extractBtn" disabled>Read document</button>
         <div class="hint" id="intakeHint">Only names on this list can submit records to Xero. The list is shared with your team — add teammates once and it's remembered.</div>
@@ -355,13 +356,42 @@
   });
 
   // ---------- contacts ----------
+  const GENERAL_PROVIDER_NAME = 'General Provider';
   async function refreshContactsFromCache(){
     const {contacts, syncedAt} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts');
     state.contacts = contacts || [];
     state.contactsSyncedAt = syncedAt;
     el('contactSyncStatus').textContent = fmtSyncStatus();
     populateContactsDatalist();
+    renderGeneralProviderStatus();
   }
+  function hasGeneralProvider(){
+    return state.contacts.some(c=>c.name.trim().toLowerCase() === GENERAL_PROVIDER_NAME.toLowerCase());
+  }
+  function renderGeneralProviderStatus(){
+    const wrap = el('generalProviderStatus');
+    if(!state.contactsSyncedAt || hasGeneralProvider()){
+      wrap.style.display = 'none';
+      return;
+    }
+    wrap.style.display = '';
+    wrap.innerHTML = `No "${GENERAL_PROVIDER_NAME}" contact yet — used for generic expenses with no specific vendor (e.g. petrol). <a href="#" id="createGeneralProviderLink">Create it</a>`;
+  }
+  document.addEventListener('click', async (e)=>{
+    if(e.target && e.target.id === 'createGeneralProviderLink'){
+      e.preventDefault();
+      const wrap = el('generalProviderStatus');
+      wrap.textContent = 'Creating…';
+      try{
+        const {contact} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts/general-provider', {method:'POST'});
+        state.contacts.push({ id: contact.id, name: contact.name, accountNumber: null, isSupplier: true, isCustomer: false });
+        renderGeneralProviderStatus();
+        if(state.draft) refreshContactMatch();
+      }catch(err){
+        wrap.textContent = 'Failed to create: ' + err.message;
+      }
+    }
+  });
   function fmtSyncStatus(){
     if(!state.contactsSyncedAt) return 'Not synced yet';
     const d = new Date(state.contactsSyncedAt);
@@ -376,6 +406,7 @@
       state.contacts = contacts; state.contactsSyncedAt = syncedAt;
       el('contactSyncStatus').textContent = fmtSyncStatus();
       populateContactsDatalist();
+      renderGeneralProviderStatus();
       if(state.draft) refreshContactMatch();
     }catch(err){
       if(err.status === 409 && err.payload?.auth_url){
@@ -492,6 +523,14 @@
         body: JSON.stringify({ recordType: state.type, files: state.files })
       });
       state.draft = draft;
+      // Generic expenses (petrol, small cash purchases) often extract a
+      // vendor name that isn't a real Xero contact, or none at all — and
+      // this app no longer auto-creates new contacts. Default those to the
+      // shared "General Provider" catch-all instead of leaving an unmatched
+      // name the user would just have to fix by hand anyway.
+      if(state.draft.record_type === 'expense' && hasGeneralProvider() && !findContactByName(state.draft.contact_name)){
+        state.draft.contact_name = GENERAL_PROVIDER_NAME;
+      }
       renderDraft();
     }catch(err){
       setMain(errorHTML('Could not read this document', err.message));
@@ -702,6 +741,10 @@
     if(!state.submitter){ alert('Choose who is submitting this record first.'); return; }
     const d = state.draft;
     if(!d.contact_name.trim()){ alert('Contact name is required.'); return; }
+    if(!d.contact_id){
+      alert(`Pick an existing Xero contact from the list (not a typed name) before sending — this app no longer auto-creates new contacts. For a generic expense with no specific vendor, use "${GENERAL_PROVIDER_NAME}".`);
+      return;
+    }
 
     el('approveBtn').disabled = true;
     el('approveBtn').textContent = 'Sending…';
