@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manifest — Provizas</title>
+<link rel="icon" type="image/png" href="/assets/symbol.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#28285F;
+    --navy-soft:#3B3B79;
+    --orange:#D2643C;
+    --orange-soft:#D2643C1a;
+    --orange-line:#D2643C55;
+    --white:#FFFFFF;
+    --slate:#667280;
+    --light-gray:#F2F4F7;
+    --line:#E3E6EB;
+    --font-head:'Manrope',-apple-system,sans-serif;
+    --font-body:'Inter',-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--light-gray);
+    font-family:var(--font-body);
+    color:var(--navy);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  h1,h2,h3{font-family:var(--font-head);margin:0;}
+  input,select,button,textarea{font-family:var(--font-body);}
+
+  /* ---------- header ---------- */
+  header.top{
+    background:var(--navy);
+    padding:14px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  header.top .brandmark{height:30px;display:block;}
+  header.top .apptitle{
+    color:var(--white);
+    font-family:var(--font-body);
+    font-size:13px;
+    letter-spacing:0.02em;
+    opacity:0.75;
+  }
+  header.top .today{
+    color:var(--white);
+    font-size:12px;
+    opacity:0.6;
+  }
+
+  .shell{max-width:1180px;margin:0 auto;padding:28px 20px 64px;}
+
+  .layout{display:grid;grid-template-columns:300px 1fr;gap:22px;align-items:start;}
+  @media (max-width:860px){.layout{grid-template-columns:1fr;}}
+
+  .panel{background:var(--white);border:1px solid var(--line);}
+  .panel-head{
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:13px;
+    color:var(--navy);
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .panel-body{padding:18px;}
+
+  .field-label{font-size:12px;color:var(--slate);margin-bottom:6px;display:block;font-weight:500;}
+
+  .type-toggle{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid var(--navy);border-radius:6px;overflow:hidden;margin-bottom:18px;}
+  .type-toggle button{
+    font-size:12.5px;font-weight:600;padding:9px 4px;background:var(--white);
+    border:none;border-right:1px solid var(--navy);cursor:pointer;color:var(--navy);
+  }
+  .type-toggle button:last-child{border-right:none;}
+  .type-toggle button.active{background:var(--navy);color:var(--white);}
+
+  .dropzone{
+    border:1.5px dashed var(--line);border-radius:8px;padding:26px 14px;text-align:center;
+    cursor:pointer;margin-bottom:14px;transition:border-color .15s ease,background .15s ease;
+  }
+  .dropzone:hover,.dropzone.drag{border-color:var(--orange);background:var(--orange-soft);}
+  .dropzone .icon{font-size:22px;margin-bottom:6px;color:var(--orange);}
+  .dropzone .msg{font-size:13px;color:var(--navy);font-weight:500;}
+  .dropzone .sub{font-size:11.5px;color:var(--slate);margin-top:3px;}
+  input[type=file]{display:none;}
+
+  .file-chip{
+    display:flex;align-items:center;justify-content:space-between;font-size:12px;
+    padding:7px 9px;background:var(--light-gray);border-radius:6px;margin-bottom:6px;
+  }
+  .file-chip button{border:none;background:none;color:var(--orange);cursor:pointer;font-size:14px;padding:0 0 0 8px;}
+
+  select,input[type=text]{
+    width:100%;font-size:13px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;
+    background:var(--white);color:var(--navy);
+  }
+  select:focus,input:focus{outline:none;border-color:var(--orange);}
+
+  .primary-btn{
+    width:100%;font-weight:700;font-size:13px;padding:12px;background:var(--orange);color:var(--white);
+    border:none;border-radius:6px;cursor:pointer;margin-top:16px;letter-spacing:0.01em;
+  }
+  .primary-btn:disabled{background:var(--line);color:var(--slate);cursor:not-allowed;}
+  .primary-btn:not(:disabled):hover{background:#BC5631;}
+
+  .secondary-btn{
+    font-size:12px;font-weight:600;padding:8px 10px;border:1px solid var(--navy);border-radius:6px;
+    background:var(--white);color:var(--navy);cursor:pointer;flex:1;
+  }
+  .secondary-btn:hover{background:var(--light-gray);}
+  .secondary-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+  .hint{font-size:11px;color:var(--slate);margin-top:8px;line-height:1.5;}
+
+  .add-user-row{display:flex;gap:6px;margin-top:8px;}
+  .add-user-row input{flex:1;}
+  .add-user-row button{
+    font-size:12px;padding:0 12px;border:1px solid var(--navy);border-radius:6px;background:var(--white);cursor:pointer;
+  }
+
+  /* ---------- main / draft card ---------- */
+  .empty-state{padding:70px 30px;text-align:center;color:var(--slate);border:1px dashed var(--line);border-radius:8px;background:var(--white);}
+  .empty-state .glyph{font-size:26px;margin-bottom:10px;color:var(--line);}
+  .empty-state .lead{font-size:14px;color:var(--navy);margin-bottom:4px;font-weight:600;}
+  .empty-state .fine{font-size:12.5px;}
+
+  .loading-state{padding:60px 30px;text-align:center;background:var(--white);border:1px solid var(--line);}
+  .loading-state .spinner{
+    width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--orange);
+    border-radius:50%;margin:0 auto 14px;animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-state .lead{font-size:13.5px;color:var(--navy);font-weight:600;}
+
+  /* signature depth moment: one layered offset panel behind the draft card */
+  .draft-wrap{position:relative;}
+  .draft-wrap::before{
+    content:'';position:absolute;inset:10px -10px -10px 10px;background:var(--light-gray);
+    border:1px solid var(--line);z-index:0;
+  }
+  .manifest{position:relative;z-index:1;background:var(--white);border:1px solid var(--line);}
+
+  .status-pill{
+    position:absolute;top:18px;right:20px;font-family:var(--font-head);font-weight:700;font-size:11.5px;
+    letter-spacing:0.06em;padding:5px 12px;border-radius:20px;text-transform:uppercase;
+  }
+  .status-pill.draft{background:var(--orange-soft);color:var(--orange);}
+  .status-pill.sent{background:#E8F3EF;color:#2F6E62;}
+
+  .manifest-head{padding:20px 22px 6px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px 18px;}
+  @media (max-width:640px){.manifest-head{grid-template-columns:1fr 1fr;}}
+  .mf{display:flex;flex-direction:column;gap:5px;}
+  .mf label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:var(--slate);font-weight:600;}
+  .mf input,.mf select{
+    font-size:13px;border:none;border-bottom:1.5px solid var(--line);background:transparent;padding:4px 0;color:var(--navy);
+  }
+  .mf input:focus,.mf select:focus{outline:none;border-bottom-color:var(--orange);}
+
+  .manifest-contact{padding:16px 22px;border-top:1px solid var(--line);margin-top:10px;}
+  .manifest-contact label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;color:var(--slate);font-weight:600;}
+  .manifest-contact input{
+    width:100%;font-family:var(--font-head);font-weight:700;font-size:17px;border:none;
+    border-bottom:1.5px solid var(--line);padding:6px 0;background:transparent;color:var(--navy);margin-top:3px;
+  }
+  .manifest-contact input:focus{outline:none;border-bottom-color:var(--orange);}
+  .contact-flag{display:inline-block;margin-top:9px;font-size:11px;padding:4px 10px;border-radius:20px;font-weight:600;}
+  .contact-flag.matched{background:#E8F3EF;color:#2F6E62;}
+  .contact-flag.new{background:var(--orange-soft);color:var(--orange);}
+  .contact-flag:empty{display:none;}
+
+  .lines-wrap{padding:16px 22px 6px;}
+  table.lines{width:100%;border-collapse:collapse;}
+  table.lines th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--slate);
+    padding:0 8px 8px 0;border-bottom:1.5px solid var(--navy);font-weight:700;
+  }
+  table.lines td{padding:8px 8px 8px 0;border-bottom:1px solid var(--line);vertical-align:top;}
+  table.lines input{width:100%;font-size:12.5px;border:none;background:transparent;padding:4px 2px;color:var(--navy);font-variant-numeric:tabular-nums;}
+  table.lines input:focus{outline:1.5px solid var(--orange);border-radius:3px;}
+  table.lines .num{text-align:right;font-variant-numeric:tabular-nums;}
+  table.lines .del{background:none;border:none;color:var(--orange);cursor:pointer;font-size:15px;padding:0 4px;}
+  .add-line{font-size:11.5px;font-weight:600;color:var(--orange);background:none;border:none;cursor:pointer;padding:8px 0 14px;}
+
+  .manifest-totals{display:flex;justify-content:flex-end;padding:0 22px 20px;}
+  .totals-box{border:1px solid var(--navy);border-radius:6px;min-width:220px;overflow:hidden;}
+  .totals-row{display:flex;justify-content:space-between;font-size:12.5px;padding:9px 12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  .totals-row.grand{font-weight:700;font-size:14px;border-bottom:none;background:var(--light-gray);}
+
+  .manifest-footer{padding:14px 22px 20px;border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+  .footer-meta{font-size:11.5px;color:var(--slate);}
+  .actions{display:flex;gap:10px;}
+  .btn{font-weight:700;font-size:12.5px;padding:10px 18px;border-radius:6px;border:1.5px solid var(--navy);background:var(--white);cursor:pointer;}
+  .btn.reject{color:var(--orange);border-color:var(--orange);}
+  .btn.reject:hover{background:var(--orange-soft);}
+  .btn.approve{background:var(--navy);color:var(--white);border-color:var(--navy);}
+  .btn.approve:hover{background:var(--navy-soft);}
+  .btn:disabled{opacity:0.45;cursor:not-allowed;}
+
+  .send-status{padding:14px 22px;font-size:12.5px;border-top:1px solid var(--line);}
+  .send-status.ok{color:#2F6E62;background:#F3FAF8;}
+  .send-status.err{color:var(--orange);background:var(--orange-soft);}
+  .send-status a{color:inherit;font-weight:700;}
+
+  /* ---------- history ---------- */
+  .history{margin-top:26px;}
+  table.hist{width:100%;border-collapse:collapse;}
+  table.hist th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--slate);padding:10px 12px;border-bottom:1.5px solid var(--navy);font-weight:700;}
+  table.hist td{padding:10px 12px;font-size:12.5px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  .pill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;display:inline-block;text-transform:uppercase;letter-spacing:0.03em;}
+  .pill.sent{background:#E8F3EF;color:#2F6E62;}
+  .pill.failed{background:var(--orange-soft);color:var(--orange);}
+  .hist-empty{padding:22px;text-align:center;color:var(--slate);font-size:12.5px;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <img class="brandmark" src="/assets/lockup-reverse.png" alt="Provizas" onerror="this.style.display='none'">
+  <div class="apptitle">Manifest — document intake for Xero</div>
+  <div class="today" id="todayLabel"></div>
+</header>
+
+<div class="shell">
+  <div class="layout">
+    <!-- INTAKE RAIL -->
+    <div class="panel">
+      <div class="panel-head">1 · Intake</div>
+      <div class="panel-body">
+
+        <span class="field-label">Record type</span>
+        <div class="type-toggle" id="typeToggle">
+          <button data-type="bill" class="active">Bill</button>
+          <button data-type="invoice">Invoice</button>
+          <button data-type="expense">Expense</button>
+        </div>
+
+        <span class="field-label">Source document</span>
+        <div class="dropzone" id="dropzone">
+          <div class="icon">⤒</div>
+          <div class="msg">Upload or drop a file</div>
+          <div class="sub">Photo, scan, or PDF of the document</div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*,.pdf" capture="environment" multiple>
+        <div id="fileList"></div>
+
+        <span class="field-label" style="margin-top:14px;">Submitted by</span>
+        <select id="userSelect"></select>
+        <div class="add-user-row">
+          <input type="text" id="newUserInput" placeholder="Add a name…">
+          <button id="addUserBtn">Add</button>
+        </div>
+
+        <span class="field-label" style="margin-top:14px;">Xero contacts</span>
+        <div style="display:flex;gap:8px;">
+          <button class="secondary-btn" id="syncContactsBtn">Sync from Xero</button>
+        </div>
+        <div class="hint" id="contactSyncStatus">Not synced yet</div>
+
+        <button class="primary-btn" id="extractBtn" disabled>Read document</button>
+        <div class="hint" id="intakeHint">Only names on this list can submit records to Xero. The list is shared with your team — add teammates once and it's remembered.</div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div id="mainArea">
+      <div class="empty-state">
+        <div class="glyph">▭</div>
+        <div class="lead">No document loaded</div>
+        <div class="fine">Upload a bill, invoice, or receipt to begin</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="history">
+    <div class="panel">
+      <div class="panel-head">Log</div>
+      <div id="historyBody"><div class="hist-empty">Nothing submitted yet</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const state = {
+    type: 'bill',
+    files: [],
+    draft: null,
+    submitter: null,
+    contacts: [],
+    contactsSyncedAt: null,
+    history: []
+  };
+
+  const el = (id) => document.getElementById(id);
+  const todayLabel = el('todayLabel');
+  todayLabel.textContent = new Date().toLocaleDateString(undefined,{weekday:'short', year:'numeric', month:'short', day:'numeric'});
+
+  async function api(path, opts){
+    const resp = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{}));
+    const data = await resp.json().catch(()=>({}));
+    if(!resp.ok){
+      const err = new Error(data.error || `Request failed (${resp.status})`);
+      err.status = resp.status;
+      err.payload = data;
+      throw err;
+    }
+    return data;
+  }
+
+  // ---------- users ----------
+  const userSelect = el('userSelect');
+  async function refreshUsers(selectName){
+    const {users} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/users');
+    userSelect.innerHTML = users.map(u=>`<option value="${u}">${u}</option>`).join('');
+    if(selectName && users.includes(selectName)) userSelect.value = selectName;
+    state.submitter = userSelect.value;
+  }
+  userSelect.addEventListener('change', ()=>{ state.submitter = userSelect.value; });
+  el('addUserBtn').addEventListener('click', async ()=>{
+    const val = el('newUserInput').value.trim();
+    if(!val) return;
+    await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/users', {method:'POST', body: JSON.stringify({name: val})});
+    el('newUserInput').value = '';
+    await refreshUsers(val);
+  });
+
+  // ---------- type toggle ----------
+  el('typeToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button');
+    if(!btn) return;
+    state.type = btn.dataset.type;
+    [...el('typeToggle').children].forEach(b=>b.classList.toggle('active', b===btn));
+    populateContactsDatalist();
+  });
+
+  // ---------- contacts ----------
+  async function refreshContactsFromCache(){
+    const {contacts, syncedAt} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts');
+    state.contacts = contacts || [];
+    state.contactsSyncedAt = syncedAt;
+    el('contactSyncStatus').textContent = fmtSyncStatus();
+    populateContactsDatalist();
+  }
+  function fmtSyncStatus(){
+    if(!state.contactsSyncedAt) return 'Not synced yet';
+    const d = new Date(state.contactsSyncedAt);
+    return `Synced ${d.toLocaleDateString(undefined,{month:'short',day:'numeric'})} at ${d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})} · ${state.contacts.length} contacts`;
+  }
+  el('syncContactsBtn').addEventListener('click', async ()=>{
+    const btn = el('syncContactsBtn');
+    btn.disabled = true; btn.textContent = 'Syncing…';
+    el('contactSyncStatus').textContent = 'Fetching contacts from Xero…';
+    try{
+      const {contacts, syncedAt} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts/sync', {method:'POST'});
+      state.contacts = contacts; state.contactsSyncedAt = syncedAt;
+      el('contactSyncStatus').textContent = fmtSyncStatus();
+      populateContactsDatalist();
+      if(state.draft) refreshContactMatch();
+    }catch(err){
+      if(err.status === 409 && err.payload?.auth_url){
+        el('contactSyncStatus').innerHTML = `Xero needs a one-time authorization — <a href="${err.payload.auth_url}" target="_blank" rel="noopener">connect here</a>, then try syncing again.`;
+      } else {
+        el('contactSyncStatus').textContent = 'Sync failed: ' + err.message;
+      }
+    }finally{
+      btn.disabled = false; btn.textContent = 'Sync from Xero';
+    }
+  });
+
+  function populateContactsDatalist(){
+    let dl = document.getElementById('contactsDatalist');
+    if(!dl){ dl = document.createElement('datalist'); dl.id = 'contactsDatalist'; document.body.appendChild(dl); }
+    const effectiveType = state.draft ? state.draft.record_type : state.type;
+    const relevant = effectiveType === 'invoice'
+      ? state.contacts.filter(c=>c.isCustomer)
+      : effectiveType === 'bill' || effectiveType === 'expense'
+        ? state.contacts.filter(c=>c.isSupplier)
+        : state.contacts;
+    const list = relevant.length ? relevant : state.contacts;
+    dl.innerHTML = list.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<option value="${escAttr(c.name)}">`).join('');
+  }
+  function findContactByName(name){
+    if(!name) return null;
+    const n = name.trim().toLowerCase();
+    return state.contacts.find(c=>c.name.trim().toLowerCase() === n) || null;
+  }
+
+  // ---------- file intake ----------
+  const dropzone = el('dropzone');
+  const fileInput = el('fileInput');
+  dropzone.addEventListener('click', ()=>fileInput.click());
+  ['dragover','dragenter'].forEach(ev=>dropzone.addEventListener(ev,(e)=>{e.preventDefault();dropzone.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev,(e)=>{e.preventDefault();dropzone.classList.remove('drag');}));
+  dropzone.addEventListener('drop', (e)=>{ handleFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', (e)=>handleFiles(e.target.files));
+
+  function fileToBase64(file){
+    return new Promise((res,rej)=>{
+      const r = new FileReader();
+      r.onload = ()=>res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function handleFiles(fileListObj){
+    for(const f of fileListObj){
+      const base64 = await fileToBase64(f);
+      state.files.push({name:f.name, mime:f.type || 'application/octet-stream', base64});
+    }
+    renderFileList();
+    el('extractBtn').disabled = state.files.length === 0;
+  }
+
+  function renderFileList(){
+    el('fileList').innerHTML = state.files.map((f,i)=>`
+      <div class="file-chip">
+        <span>${f.name.length>26 ? f.name.slice(0,24)+'…' : f.name}</span>
+        <button data-idx="${i}" class="rmfile">✕</button>
+      </div>
+    `).join('');
+    [...document.querySelectorAll('.rmfile')].forEach(b=>{
+      b.addEventListener('click', ()=>{
+        state.files.splice(+b.dataset.idx,1);
+        renderFileList();
+        el('extractBtn').disabled = state.files.length === 0;
+      });
+    });
+  }
+
+  // ---------- extraction ----------
+  el('extractBtn').addEventListener('click', extractDraft);
+
+  async function extractDraft(){
+    setMain(loadingHTML('Reading document…'));
+    try{
+      const {draft} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/extract', {
+        method:'POST',
+        body: JSON.stringify({ recordType: state.type, files: state.files })
+      });
+      state.draft = draft;
+      renderDraft();
+    }catch(err){
+      setMain(errorHTML('Could not read this document', err.message));
+    }
+  }
+
+  // ---------- rendering ----------
+  function loadingHTML(msg){
+    return `<div class="loading-state"><div class="spinner"></div><div class="lead">${msg}</div></div>`;
+  }
+  function errorHTML(lead, fine){
+    return `<div class="empty-state">
+      <div class="glyph" style="color:var(--orange)">!</div>
+      <div class="lead" style="color:var(--orange)">${lead}</div>
+      <div class="fine">${escHtml(fine)}</div>
+    </div>`;
+  }
+  function setMain(html){ el('mainArea').innerHTML = html; }
+
+  function calcTotal(){
+    return state.draft.line_items.reduce((s,li)=>s + (Number(li.quantity)||0)*(Number(li.unit_amount)||0), 0);
+  }
+
+  function renderDraft(){
+    const d = state.draft;
+    const total = calcTotal();
+
+    setMain(`
+      <div class="draft-wrap">
+      <div class="manifest">
+        <div class="status-pill draft" id="stampEl">Draft</div>
+        <div class="manifest-head">
+          <div class="mf">
+            <label>Record type</label>
+            <select id="mf_type">
+              <option value="bill" ${d.record_type==='bill'?'selected':''}>Bill</option>
+              <option value="invoice" ${d.record_type==='invoice'?'selected':''}>Invoice</option>
+              <option value="expense" ${d.record_type==='expense'?'selected':''}>Expense</option>
+            </select>
+          </div>
+          <div class="mf"><label>Reference</label><input id="mf_ref" type="text" value="${escAttr(d.reference)}"></div>
+          <div class="mf"><label>Document date</label><input id="mf_date" type="date" value="${d.document_date}"></div>
+          <div class="mf"><label>Due date</label><input id="mf_due" type="date" value="${d.due_date||''}"></div>
+        </div>
+
+        <div class="manifest-contact">
+          <label>${d.record_type === 'invoice' ? 'Customer' : 'Supplier'}</label>
+          <input id="mf_contact" type="text" list="contactsDatalist" value="${escAttr(d.contact_name)}" autocomplete="off">
+          <span class="contact-flag" id="contactFlag"></span>
+        </div>
+
+        <div class="lines-wrap">
+          <table class="lines">
+            <thead><tr>
+              <th style="width:52%">Description</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:18%">Unit price</th>
+              <th style="width:12%" class="num">Amount</th>
+              <th style="width:4%"></th>
+            </tr></thead>
+            <tbody id="linesBody"></tbody>
+          </table>
+          <button class="add-line" id="addLineBtn">+ Add line</button>
+        </div>
+
+        <div class="manifest-totals">
+          <div class="totals-box">
+            <div class="totals-row"><span>Currency</span><span>${d.currency}</span></div>
+            <div class="totals-row grand"><span>Total</span><span id="totAmount">${fmt(total)}</span></div>
+          </div>
+        </div>
+
+        <div class="manifest-footer">
+          <div class="footer-meta">Submitted by <strong id="footerSubmitter">${state.submitter||'—'}</strong>${d.notes ? ' · '+escHtml(d.notes) : ''}</div>
+          <div class="actions">
+            <button class="btn reject" id="rejectBtn">Discard</button>
+            <button class="btn approve" id="approveBtn">Approve & send to Xero</button>
+          </div>
+        </div>
+        <div id="sendStatusWrap"></div>
+      </div>
+      </div>
+    `);
+
+    renderLines();
+    bindDraftEvents();
+    populateContactsDatalist();
+    refreshContactMatch();
+  }
+
+  function renderLines(){
+    const body = el('linesBody');
+    body.innerHTML = state.draft.line_items.map((li,i)=>`
+      <tr data-idx="${i}">
+        <td><input type="text" class="li_desc" value="${escAttr(li.description)}"></td>
+        <td><input type="number" step="any" class="li_qty" value="${li.quantity}"></td>
+        <td><input type="number" step="any" class="li_price" value="${li.unit_amount}"></td>
+        <td class="num" data-lineamt>${fmt(li.quantity*li.unit_amount)}</td>
+        <td><button class="del" data-del="${i}">✕</button></td>
+      </tr>
+    `).join('');
+    bindLineEvents();
+  }
+
+  function refreshTotals(){
+    el('totAmount').textContent = fmt(calcTotal());
+    [...document.querySelectorAll('#linesBody tr')].forEach(tr=>{
+      const i = +tr.dataset.idx;
+      const li = state.draft.line_items[i];
+      tr.querySelector('[data-lineamt]').textContent = fmt(li.quantity*li.unit_amount);
+    });
+  }
+
+  function refreshContactMatch(){
+    const flagEl = document.getElementById('contactFlag');
+    if(!flagEl || !state.draft) return;
+    const match = findContactByName(state.draft.contact_name);
+    if(match){
+      const typeOk = state.draft.record_type === 'invoice' ? match.isCustomer : match.isSupplier;
+      flagEl.textContent = `Matched to existing Xero contact${typeOk ? '' : ' (not tagged as this type in Xero, but will still be used)'}`;
+      flagEl.className = 'contact-flag matched';
+      state.draft.contact_id = match.id;
+    } else if(state.draft.contact_name && state.draft.contact_name.trim()){
+      flagEl.textContent = 'No match in Xero — will be created as a new contact';
+      flagEl.className = 'contact-flag new';
+      state.draft.contact_id = null;
+    } else {
+      flagEl.textContent = ''; flagEl.className = 'contact-flag'; state.draft.contact_id = null;
+    }
+  }
+
+  function bindDraftEvents(){
+    el('mf_type').addEventListener('change', e=>{ state.draft.record_type = e.target.value; renderDraft(); });
+    el('mf_ref').addEventListener('input', e=>{ state.draft.reference = e.target.value; });
+    el('mf_date').addEventListener('input', e=>{ state.draft.document_date = e.target.value; });
+    el('mf_due').addEventListener('input', e=>{ state.draft.due_date = e.target.value; });
+    el('mf_contact').addEventListener('input', e=>{ state.draft.contact_name = e.target.value; refreshContactMatch(); });
+
+    el('addLineBtn').addEventListener('click', ()=>{
+      state.draft.line_items.push({description:'', quantity:1, unit_amount:0});
+      renderLines();
+      refreshTotals();
+    });
+
+    el('rejectBtn').addEventListener('click', ()=>{
+      state.draft = null;
+      state.files = [];
+      renderFileList();
+      el('extractBtn').disabled = true;
+      setMain(`<div class="empty-state">
+        <div class="glyph">▭</div>
+        <div class="lead">Discarded</div>
+        <div class="fine">Upload another document to start a new draft</div>
+      </div>`);
+    });
+
+    el('approveBtn').addEventListener('click', approveDraft);
+  }
+
+  function bindLineEvents(){
+    [...document.querySelectorAll('#linesBody tr')].forEach(tr=>{
+      const i = +tr.dataset.idx;
+      tr.querySelector('.li_desc').addEventListener('input', e=>{ state.draft.line_items[i].description = e.target.value; });
+      tr.querySelector('.li_qty').addEventListener('input', e=>{ state.draft.line_items[i].quantity = Number(e.target.value)||0; refreshTotals(); });
+      tr.querySelector('.li_price').addEventListener('input', e=>{ state.draft.line_items[i].unit_amount = Number(e.target.value)||0; refreshTotals(); });
+      const delBtn = tr.querySelector('[data-del]');
+      if(delBtn){
+        delBtn.addEventListener('click', ()=>{
+          state.draft.line_items.splice(i,1);
+          if(state.draft.line_items.length===0) state.draft.line_items.push({description:'',quantity:1,unit_amount:0});
+          renderLines(); refreshTotals();
+        });
+      }
+    });
+  }
+
+  // ---------- approve & send ----------
+  async function approveDraft(){
+    if(!state.submitter){ alert('Choose who is submitting this record first.'); return; }
+    const d = state.draft;
+    if(!d.contact_name.trim()){ alert('Contact name is required.'); return; }
+
+    el('approveBtn').disabled = true;
+    el('approveBtn').textContent = 'Sending…';
+    el('sendStatusWrap').innerHTML = `<div class="send-status">Sending to Xero…</div>`;
+
+    try{
+      const {result} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/submit', {
+        method:'POST',
+        body: JSON.stringify({ draft: d, contactId: d.contact_id || null, submitter: state.submitter, files: state.files })
+      });
+
+      await refreshHistory();
+
+      if(result.success){
+        const attNote = (typeof result.attachments_uploaded === 'number') ? ` · ${result.attachments_uploaded} attachment${result.attachments_uploaded===1?'':'s'} uploaded` : '';
+        const liNote = (typeof result.line_items_added === 'number' && result.line_items_added > 0) ? ` · ${result.line_items_added} extra line${result.line_items_added===1?'':'s'} added` : '';
+        el('sendStatusWrap').innerHTML = `<div class="send-status ok">✓ Sent to Xero${result.record_number ? ' — '+escHtml(result.record_number) : ''}${liNote}${attNote}. ${escHtml(result.message||'')}</div>`;
+        const stamp = document.getElementById('stampEl');
+        stamp.textContent = 'Sent'; stamp.classList.remove('draft'); stamp.classList.add('sent');
+        el('approveBtn').textContent = 'Sent';
+      } else {
+        el('sendStatusWrap').innerHTML = `<div class="send-status err">✕ Not sent: ${escHtml(result.message||'Unknown error')}</div>`;
+        el('approveBtn').disabled = false;
+        el('approveBtn').textContent = 'Retry send to Xero';
+      }
+    }catch(err){
+      if(err.status === 409 && err.payload?.auth_url){
+        el('sendStatusWrap').innerHTML = `<div class="send-status err">Xero needs a one-time authorization — <a href="${err.payload.auth_url}" target="_blank" rel="noopener">connect here</a>, then retry.</div>`;
+      } else {
+        el('sendStatusWrap').innerHTML = `<div class="send-status err">✕ Request failed: ${escHtml(err.message)}</div>`;
+      }
+      el('approveBtn').disabled = false;
+      el('approveBtn').textContent = 'Retry send to Xero';
+    }
+  }
+
+  async function refreshHistory(){
+    const {history} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/history');
+    state.history = history || [];
+    renderHistory();
+  }
+
+  function renderHistory(){
+    if(!state.history.length){
+      el('historyBody').innerHTML = `<div class="hist-empty">Nothing submitted yet</div>`;
+      return;
+    }
+    el('historyBody').innerHTML = `
+      <table class="hist">
+        <thead><tr><th>Date</th><th>Type</th><th>Contact</th><th>Reference</th><th>Total</th><th>By</th><th>Status</th></tr></thead>
+        <tbody>
+          ${state.history.map(h=>`
+            <tr>
+              <td>${new Date(h.when).toLocaleDateString()}</td>
+              <td>${h.type}</td>
+              <td>${escHtml(h.contact)}</td>
+              <td>${escHtml(h.reference||'—')}</td>
+              <td>${h.currency} ${fmt(h.total)}</td>
+              <td>${escHtml(h.submitter||'—')}</td>
+              <td><span class="pill ${h.success?'sent':'failed'}">${h.success?'sent':'failed'}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // ---------- utils ----------
+  function fmt(n){ return (Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function escHtml(s){ return String(s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+  function escAttr(s){ return String(s||'').replace(/"/g,'&quot;'); }
+
+  // ---------- init ----------
+  (async function init(){
+    await refreshUsers();
+    await refreshHistory();
+    await refreshContactsFromCache();
+  })();
+})();
+</script>
+</body>
+</html>
