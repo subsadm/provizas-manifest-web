@@ -690,6 +690,14 @@
   }
 
   // ---------- approve & send ----------
+  // Submission spans Claude, Zapier, and Xero — a pipeline whose total time
+  // varies too much to hold open in one request without risking a gateway
+  // timeout or a raw network failure. So this posts once to kick off a
+  // background job, then polls a small status endpoint every few seconds
+  // until it's done — each poll is fast and cheap on its own.
+  const POLL_INTERVAL_MS = 3000;
+  const POLL_MAX_ATTEMPTS = 100; // ~5 minutes
+
   async function approveDraft(){
     if(!state.submitter){ alert('Choose who is submitting this record first.'); return; }
     const d = state.draft;
@@ -700,13 +708,51 @@
     el('sendStatusWrap').innerHTML = `<div class="send-status">Sending to Xero…</div>`;
 
     try{
-      const {result} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/submit', {
+      const {jobId} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/submit', {
         method:'POST',
         body: JSON.stringify({ draft: d, contactId: d.contact_id || null, submitter: state.submitter, files: state.files })
       });
+      await pollSubmitJob(jobId);
+    }catch(err){
+      el('sendStatusWrap').innerHTML = `<div class="send-status err">✕ Request failed: ${escHtml(err.message)}</div>`;
+      el('approveBtn').disabled = false;
+      el('approveBtn').textContent = 'Retry send to Xero';
+    }
+  }
 
+  function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+  async function pollSubmitJob(jobId){
+    for(let attempt=0; attempt<POLL_MAX_ATTEMPTS; attempt++){
+      await sleep(POLL_INTERVAL_MS);
+      let job;
+      try{
+        job = await api(`https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/submit/status?id=${encodeURIComponent(jobId)}`);
+      }catch(err){
+        // A single poll failing (e.g. a transient network blip) isn't fatal —
+        // the job keeps running server-side regardless; just try again.
+        continue;
+      }
+
+      if(job.status === 'pending'){
+        el('sendStatusWrap').innerHTML = `<div class="send-status">Sending to Xero… (${attempt+1})</div>`;
+        continue;
+      }
+
+      if(job.status === 'error'){
+        if(job.error === 'auth_required' && job.auth_url){
+          el('sendStatusWrap').innerHTML = `<div class="send-status err">Xero needs a one-time authorization — <a href="${job.auth_url}" target="_blank" rel="noopener">connect here</a>, then retry.</div>`;
+        } else {
+          el('sendStatusWrap').innerHTML = `<div class="send-status err">✕ Not sent: ${escHtml(job.error||'Unknown error')}</div>`;
+        }
+        el('approveBtn').disabled = false;
+        el('approveBtn').textContent = 'Retry send to Xero';
+        return;
+      }
+
+      // status === 'done'
       await refreshHistory();
-
+      const result = job.result || {};
       if(result.success){
         const attNote = (typeof result.attachments_uploaded === 'number') ? ` · ${result.attachments_uploaded} attachment${result.attachments_uploaded===1?'':'s'} uploaded` : '';
         const liNote = (typeof result.line_items_added === 'number' && result.line_items_added > 0) ? ` · ${result.line_items_added} extra line${result.line_items_added===1?'':'s'} added` : '';
@@ -719,15 +765,12 @@
         el('approveBtn').disabled = false;
         el('approveBtn').textContent = 'Retry send to Xero';
       }
-    }catch(err){
-      if(err.status === 409 && err.payload?.auth_url){
-        el('sendStatusWrap').innerHTML = `<div class="send-status err">Xero needs a one-time authorization — <a href="${err.payload.auth_url}" target="_blank" rel="noopener">connect here</a>, then retry.</div>`;
-      } else {
-        el('sendStatusWrap').innerHTML = `<div class="send-status err">✕ Request failed: ${escHtml(err.message)}</div>`;
-      }
-      el('approveBtn').disabled = false;
-      el('approveBtn').textContent = 'Retry send to Xero';
+      return;
     }
+
+    el('sendStatusWrap').innerHTML = `<div class="send-status err">Still processing after 5 minutes — check the Log below shortly, or Xero directly, before retrying (retrying while the original is still running risks a duplicate).</div>`;
+    el('approveBtn').disabled = false;
+    el('approveBtn').textContent = 'Retry send to Xero';
   }
 
   async function refreshHistory(){
