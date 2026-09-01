@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Manifest — Provizas</title>
-<link rel="icon" type="image/png" href="assets/symbol.png">
+<link rel="icon" type="image/png" href="/assets/symbol.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
@@ -292,7 +292,7 @@
 <body>
 
 <header class="top">
-  <img class="brandmark" src="assets/lockup-reverse.png" alt="Provizas" onerror="this.style.display='none'">
+  <img class="brandmark" src="/assets/lockup-reverse.png" alt="Provizas" onerror="this.style.display='none'">
   <h1 class="apptitle">Manifest — document intake for Xero</h1>
   <div class="today" id="todayLabel"></div>
 </header>
@@ -369,7 +369,8 @@
     history: [],
     historySort: {key:'when', dir:'desc'},
     historyPage: 0,
-    tracking: []
+    tracking: [],
+    items: []
   };
 
   const el = (id) => document.getElementById(id);
@@ -428,6 +429,14 @@
     const {tracking} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/tracking');
     state.tracking = tracking || [];
   }
+  async function refreshItems(){
+    const {items} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/items');
+    state.items = items || [];
+  }
+  function itemLabel(code){
+    const it = state.items.find(i=>i.code === code);
+    return it ? `${it.code} — ${it.description || 'item'}` : code;
+  }
   function hasGeneralProvider(){
     return state.contacts.some(c=>c.name.trim().toLowerCase() === GENERAL_PROVIDER_NAME.toLowerCase());
   }
@@ -465,9 +474,10 @@
     btn.disabled = true; btn.textContent = 'Syncing…';
     el('contactSyncStatus').textContent = 'Fetching contacts from Xero…';
     try{
-      const {contacts, syncedAt, tracking} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts/sync', {method:'POST'});
+      const {contacts, syncedAt, tracking, items} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/contacts/sync', {method:'POST'});
       state.contacts = contacts; state.contactsSyncedAt = syncedAt;
       if(tracking) state.tracking = tracking;
+      if(items) state.items = items;
       el('contactSyncStatus').textContent = fmtSyncStatus();
       populateContactsDatalist();
       renderGeneralProviderStatus();
@@ -758,7 +768,7 @@
     const body = el('linesBody');
     body.innerHTML = state.draft.line_items.map((li,i)=>`
       <tr data-idx="${i}">
-        <td><input type="text" class="li_desc" value="${escAttr(li.description)}"></td>
+        <td>${li.item_code ? `<span class="code" title="Xero item — description and account fill in automatically">${escAttr(li.item_code)}</span> <span style="color:var(--text-label);font-size:12.5px;">${escAttr(itemLabel(li.item_code))}</span>` : `<input type="text" class="li_desc" value="${escAttr(li.description)}">`}</td>
         <td><input type="number" step="any" class="li_qty" value="${li.quantity}"></td>
         <td><input type="number" step="any" class="li_price" value="${li.unit_amount}"></td>
         <td class="num" data-lineamt>${fmt(li.quantity*li.unit_amount)}</td>
@@ -888,7 +898,8 @@
   function bindLineEvents(){
     [...document.querySelectorAll('#linesBody tr')].forEach(tr=>{
       const i = +tr.dataset.idx;
-      tr.querySelector('.li_desc').addEventListener('input', e=>{ state.draft.line_items[i].description = e.target.value; });
+      const descInput = tr.querySelector('.li_desc');
+      if(descInput) descInput.addEventListener('input', e=>{ state.draft.line_items[i].description = e.target.value; });
       tr.querySelector('.li_qty').addEventListener('input', e=>{ state.draft.line_items[i].quantity = Number(e.target.value)||0; refreshTotals(); });
       tr.querySelector('.li_price').addEventListener('input', e=>{ state.draft.line_items[i].unit_amount = Number(e.target.value)||0; refreshTotals(); });
       const removeBtn = tr.querySelector('[data-remove]');
@@ -1090,6 +1101,7 @@
     await refreshHistory();
     await refreshContactsFromCache();
     await refreshTracking();
+    await refreshItems();
   })();
 })();
 </script>
