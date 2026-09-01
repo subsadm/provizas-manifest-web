@@ -370,7 +370,9 @@
     historySort: {key:'when', dir:'desc'},
     historyPage: 0,
     tracking: [],
-    items: []
+    items: [],
+    bankAccounts: [],
+    fxPreview: null // {rate, date, converted, loading, error} for the current expense draft
   };
 
   const el = (id) => document.getElementById(id);
@@ -436,6 +438,47 @@
   function itemLabel(code){
     const it = state.items.find(i=>i.code === code);
     return it ? `${it.code} — ${it.description || 'item'}` : code;
+  }
+  async function refreshBankAccounts(){
+    const {bankAccounts} = await api('https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/bank-accounts');
+    state.bankAccounts = bankAccounts || [];
+  }
+  // Expenses convert to the target bank account's own currency (Xero
+  // doesn't do this for us — see backend). Refetch the day's rate whenever
+  // the chosen account or the draft changes, so the review screen always
+  // shows what will actually be posted.
+  async function refreshFxPreview(){
+    const d = state.draft;
+    if(!d || d.record_type !== 'expense' || !d.bank_account_id) { state.fxPreview = null; return; }
+    const acct = state.bankAccounts.find(a=>a.id === d.bank_account_id);
+    if(!acct) { state.fxPreview = null; return; }
+    const from = (d.currency||'USD').toUpperCase();
+    if(from === acct.currency){
+      state.fxPreview = {rate:1, date:d.document_date, converted: calcTotal(), currency: acct.currency};
+      renderFxPreview();
+      return;
+    }
+    state.fxPreview = {loading:true};
+    renderFxPreview();
+    try{
+      const {rate, date} = await api(`https://ghwspgyczkgqqrvuhism.supabase.co/functions/v1/manifest/api/fx-rate?from=${encodeURIComponent(from)}&to=${encodeURIComponent(acct.currency)}&date=${encodeURIComponent(d.document_date)}`);
+      state.fxPreview = {rate, date, converted: Math.round(calcTotal()*rate*100)/100, currency: acct.currency};
+    }catch(err){
+      state.fxPreview = {error: err.message};
+    }
+    renderFxPreview();
+  }
+  function renderFxPreview(){
+    const el2 = el('fxPreview');
+    if(!el2) return;
+    const p = state.fxPreview;
+    if(!p){ el2.textContent = ''; return; }
+    if(p.loading){ el2.textContent = 'Looking up exchange rate…'; return; }
+    if(p.error){ el2.textContent = `Couldn't get an exchange rate: ${p.error}`; el2.style.color = 'var(--status-red-fg)'; return; }
+    el2.style.color = '';
+    el2.textContent = p.rate === 1
+      ? `Posts as ${fmt(p.converted)} ${p.currency} (same currency as the account).`
+      : `≈ ${fmt(p.converted)} ${p.currency} at rate ${p.rate} (${p.date}) — this is what posts to Xero.`;
   }
   function hasGeneralProvider(){
     return state.contacts.some(c=>c.name.trim().toLowerCase() === GENERAL_PROVIDER_NAME.toLowerCase());
@@ -720,6 +763,16 @@
           <div class="contact-dropdown" id="contactDropdown"></div>
         </div>
 
+        ${d.record_type === 'expense' ? `
+        <div class="manifest-contact">
+          <label>Bank account <span class="picker-cue">— which account this expense is paid from</span></label>
+          <select id="mf_bank_account">
+            <option value="">Select…</option>
+            ${state.bankAccounts.map(a => `<option value="${a.id}" ${d.bank_account_id===a.id?'selected':''}>${escHtml(a.name)} (${a.currency})</option>`).join('')}
+          </select>
+          <span class="contact-flag" id="fxPreview"></span>
+        </div>` : ''}
+
         <div class="lines-wrap">
           <table class="lines">
             <thead><tr>
@@ -762,6 +815,8 @@
     if(!state.draft.contact_id){
       renderContactDropdown(state.draft.contact_name);
     }
+    if(d.record_type === 'expense') refreshFxPreview();
+    updateApproveAvailability();
   }
 
   function renderLines(){
@@ -801,6 +856,13 @@
       const li = state.draft.line_items[i];
       tr.querySelector('[data-lineamt]').textContent = fmt(li.quantity*li.unit_amount);
     });
+    // Line-item edits change the total, which changes the converted amount
+    // — recompute from the already-fetched rate rather than re-hitting the
+    // FX API on every keystroke.
+    if(state.draft && state.draft.record_type === 'expense' && state.fxPreview && typeof state.fxPreview.rate === 'number'){
+      state.fxPreview.converted = Math.round(calcTotal()*state.fxPreview.rate*100)/100;
+      renderFxPreview();
+    }
   }
 
   function refreshContactMatch(){
@@ -836,6 +898,7 @@
       const unfilled = state.tracking.filter(cat=>!state.draft.tracking?.[cat.id]);
       if(unfilled.length) missing.push(unfilled.map(c=>c.name).join(' and '));
     }
+    if(state.draft.record_type === 'expense' && !state.draft.bank_account_id) missing.push('a bank account');
     btn.disabled = missing.length > 0;
     btn.title = missing.length ? `Still need: ${missing.join(', ')}` : '';
   }
@@ -843,8 +906,16 @@
   function bindDraftEvents(){
     el('mf_type').addEventListener('change', e=>{ state.draft.record_type = e.target.value; renderDraft(); });
     el('mf_ref').addEventListener('input', e=>{ state.draft.reference = e.target.value; });
-    el('mf_date').addEventListener('input', e=>{ state.draft.document_date = e.target.value; });
+    el('mf_date').addEventListener('input', e=>{ state.draft.document_date = e.target.value; if(state.draft.record_type==='expense') refreshFxPreview(); });
     el('mf_due').addEventListener('input', e=>{ state.draft.due_date = e.target.value; });
+    const bankAcctSel = el('mf_bank_account');
+    if(bankAcctSel){
+      bankAcctSel.addEventListener('change', e=>{
+        state.draft.bank_account_id = e.target.value || null;
+        refreshFxPreview();
+        updateApproveAvailability();
+      });
+    }
     const contactInput = el('mf_contact');
     contactInput.addEventListener('input', e=>{
       state.draft.contact_name = e.target.value;
@@ -1102,6 +1173,7 @@
     await refreshContactsFromCache();
     await refreshTracking();
     await refreshItems();
+    await refreshBankAccounts();
   })();
 })();
 </script>
